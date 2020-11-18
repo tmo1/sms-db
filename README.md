@@ -82,4 +82,4 @@ Currently, all timestamps are in [Epoch time format](https://en.wikipedia.org/wi
 
 ## Alternatives
 
-SMS-Tools, a "Multipurpose import / export / merge tool for your text message history", apparently does what sms-db does and more. It supports many more file formats, and can output to most of the formats it supports. I have not used SMS-Tools or looked at its code. The original, last updated in 2014, is ([here](https://github.com/t413/SMS-Tools); a fork, with a single commit, adding support for Bugle, in 2017, is (here)[https://github.com/p1ne/SMS-Tools].
+SMS-Tools, a "Multipurpose import / export / merge tool for your text message history", apparently does what sms-db does and more. It supports many more file formats, and can output to most of the formats it supports. I have not used SMS-Tools or looked at its code. The original, last updated in 2014, is [here](https://github.com/t413/SMS-Tools); a fork, with a single commit in 2017, adding support for Bugle, is [here](https://github.com/p1ne/SMS-Tools).
