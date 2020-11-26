@@ -16,6 +16,7 @@ use DBD::SQLite::Constants qw(:extended_result_codes);
 use Try::Tiny;
 use Time::HiRes qw(gettimeofday tv_interval);
 use Encode;
+use MIME::Base64;
 use Digest::SHA qw(sha256_hex);
 use Data::Dump;
 
@@ -31,8 +32,10 @@ unless (defined $opts{'f'}) {die "A format must be specified via '-f format'\n"}
 
 # constant definitions
 
-my ($XML, $BUGLE, $SIGNAL, $PROGRAM_VERSION, $DATABASE_VERSION) = (0, 1, 2, "0.2", 1.0);
-my @message_fields = ('timestamp', 'sender_address', 'sender_name', 'recipient_address', 'recipient_name', 'msg_box', 'source_format');
+my ($XML, $BUGLE, $SIGNAL) = (0, 1, 2);
+my ($SMS, $MMS) = (0,1); # these are the values that the Bugle database seems to use in the 'message_protocal' column of the 'messages' table
+my ($PROGRAM_VERSION, $DATABASE_VERSION) = ("0.2", 2);
+my @message_fields = ('timestamp', 'sender_address', 'sender_name', 'recipient_address', 'recipient_name', 'msg_box', 'message_type', 'source_format');
 
 # start
 
@@ -42,16 +45,16 @@ print "sms-db version $PROGRAM_VERSION\n";
 
 my $dbh = DBI->connect("dbi:SQLite:$database", undef, undef, {RaiseError => 1, PrintError => 0, AutoCommit => 0, sqlite_extended_result_codes => 1});
 unless ($dbh->tables(undef, undef, 'messages', 'TABLE')) {
-	$dbh->do("CREATE TABLE messages(_id INTEGER PRIMARY KEY AUTOINCREMENT,timestamp INT,sender_address TEXT,sender_name TEXT,recipient_address TEXT,recipient_name TEXT,msg_box INT,source_format INT,hash INT UNIQUE)");
+	$dbh->do("CREATE TABLE messages(_id INTEGER PRIMARY KEY AUTOINCREMENT,timestamp INT,sender_address TEXT,sender_name TEXT,recipient_address TEXT,recipient_name TEXT,msg_box INT,message_type INT,source_format INT,hash INT UNIQUE)");
 	$dbh->do("PRAGMA user_version = $DATABASE_VERSION");
 }
 unless ($dbh->tables(undef, undef, 'parts', 'TABLE')) {
-	$dbh->do("CREATE TABLE parts(_id INTEGER PRIMARY KEY AUTOINCREMENT,message_id INT,data TEXT,content_type TEXT,FOREIGN KEY (message_id) REFERENCES messages(_id) ON DELETE CASCADE)");
+	$dbh->do("CREATE TABLE parts(_id INTEGER PRIMARY KEY AUTOINCREMENT,message_id INT,data BLOB,content_type TEXT,filename TEXT,FOREIGN KEY (message_id) REFERENCES messages(_id) ON DELETE CASCADE)");
 	# this is a simplified version of the bugle 'parts' table, whose CREATE statement is:
 	# CREATE TABLE parts(_id INTEGER PRIMARY KEY AUTOINCREMENT,message_id INT,text TEXT,uri TEXT,content_type TEXT,width INT DEFAULT(-1),height INT DEFAULT(-1),timestamp INT, conversation_id INT NOT NULL,FOREIGN KEY (message_id) REFERENCES messages(_id) ON DELETE CASCADE FOREIGN KEY (conversation_id) REFERENCES conversations(_id) ON DELETE CASCADE )
 }
 my $message_sth = $dbh->prepare("INSERT INTO messages(" . join(',', (@message_fields, 'hash')) . ") VALUES(" . join(',', (('?') x ($#message_fields + 2))) . ")");
-my $part_sth = $dbh->prepare("INSERT INTO parts(message_id,data,content_type) VALUES(?,?,?)");
+my $part_sth = $dbh->prepare("INSERT INTO parts(message_id,data,content_type,filename) VALUES(?,?,?,?)");
 my ($total_messages, $inserted_messages, $duplicate_messages, $ignored_messages, $total_parts, $start_time) = (0, 0, 0, 0, 0, [gettimeofday]);
 
 if (defined $opts{'i'}) {
@@ -59,7 +62,7 @@ if (defined $opts{'i'}) {
 	if ($opts{'f'} eq 'xml') {
 		my $dom = XML::LibXML->load_xml(location => $opts{'i'});
 		foreach my $element ($dom->documentElement->getElementsByTagName('sms')) {
-			my %message = (source_format => $XML, timestamp => $element->getAttribute('date'));
+			my %message = (source_format => $XML, timestamp => $element->getAttribute('date'), message_type => $SMS);
 			$message{'msg_box'} = $element->getAttribute('type');
 			# we use 'msg_box' for consistency between SMS and MMS, even though SMS Backup and Restore (and perhaps Android itself?) uses 'type' here
 			($message{'sender_address'}, $message{'sender_name'}, $message{'recipient_address'}, $message{'recipient_name'}) = ($message{'msg_box'} eq 1) ? ($element->getAttribute('address'), $element->getAttribute('contact_name'), '<SELF>', '<SELF>') : ('<SELF>', '<SELF>', $element->getAttribute('address'), $element->getAttribute('contact_name'));
@@ -68,7 +71,7 @@ if (defined $opts{'i'}) {
 			insert(\%message, \@parts);
 		}
 		foreach my $element ($dom->documentElement->getElementsByTagName('mms')) {
-			my %message = (source_format => $XML, timestamp => $element->getAttribute('date'));
+			my %message = (source_format => $XML, timestamp => $element->getAttribute('date'), message_type => $MMS);
 			$message{'msg_box'} = $element->getAttribute('msg_box');
 			($message{'sender_address'}, $message{'sender_name'}, $message{'recipient_address'}, $message{'recipient_name'}) = ($message{'msg_box'} eq '1') ? ($element->getAttribute('address'), $element->getAttribute('contact_name'), '<SELF>', '<SELF>') : ('<SELF>', '<SELF>', $element->getAttribute('address'), $element->getAttribute('contact_name'));
 			foreach ($element->getElementsByTagName('addr')) {
@@ -78,18 +81,18 @@ if (defined $opts{'i'}) {
 			my @parts;
 			foreach my $part ($element->getElementsByTagName('part')) {
 				my ($text, $data, $body) = ($part->getAttribute('text'), $part->getAttribute('data'));
-				push @parts, {data => ((defined $data and $text eq "null") ? $data : $text), content_type => $part->getAttribute('ct')};
+				push @parts, {data => ((defined $data and $text eq "null") ? decode_base64($data) : $text), content_type => $part->getAttribute('ct'), filename => $part->getAttribute('name')};
 			}
 			insert(\%message, \@parts);
 		}
 	}
 	elsif ($opts{'f'} eq 'bugle') {
 		my $bugle = DBI->connect("dbi:SQLite:$opts{'i'}", undef, undef, {RaiseError => 1, PrintError => 0, AutoCommit => 0, sqlite_extended_result_codes => 1});
-		my @messages = $bugle->selectall_array("SELECT messages._id,received_timestamp,sender_info.normalized_destination,sender_info.full_name,participant_normalized_destination,participant_count,name,sub_id FROM messages INNER JOIN participants sender_info ON messages.sender_id = sender_info._id INNER JOIN conversations ON messages.conversation_id = conversations._id", {Slice => {}});
+		my @messages = $bugle->selectall_array("SELECT messages._id,received_timestamp,message_protocol,sender_info.normalized_destination,sender_info.full_name,participant_normalized_destination,participant_count,name,sub_id FROM messages INNER JOIN participants sender_info ON messages.sender_id = sender_info._id INNER JOIN conversations ON messages.conversation_id = conversations._id", {Slice => {}});
 		# we use received_timestamp instead of sent_timestamp, since for some reason the latter is often '0', while the former seems to always have a real value
 		my $message_parts_sth = $bugle->prepare("SELECT text,uri,content_type FROM parts WHERE message_id = ?");
 		foreach (@messages) {
-			my %message = (source_format => $BUGLE, sender_address => $_->{'normalized_destination'}, sender_name => $_->{'full_name'} // "<UNAVAILABLE>", timestamp => $_->{'received_timestamp'});
+			my %message = (source_format => $BUGLE, sender_address => $_->{'normalized_destination'}, sender_name => $_->{'full_name'} // "<UNAVAILABLE>", timestamp => $_->{'received_timestamp'}, message_type => $_->{'message_protocol'});
 			($message{'recipient_address'}, $message{'recipient_name'}, $message{'msg_box'}) = ($_->{sub_id} eq '-2') ? ('<SELF>', '<SELF>', 1) : ($_->{'participant_normalized_destination'}, $_->{'name'}, 2);
 			if ($_->{participant_count} > 1 && not defined $_->{'participant_normalized_destination'}) {$message{'recipient_address'} = "<$_->{participant_count}>"};
 			my @parts = $bugle->selectall_array($message_parts_sth, {Slice => {}}, $_->{_id});
@@ -107,7 +110,7 @@ if (defined $opts{'i'}) {
 		
 		my @smss = $signal->selectall_array("SELECT address,date,type,body,phone,system_display_name FROM sms INNER JOIN recipient ON sms.address = recipient._id", {Slice => {}});
 		foreach (@smss) {
-			my %message = (source_format => $SIGNAL, timestamp => $_->{date});
+			my %message = (source_format => $SIGNAL, timestamp => $_->{date}, message_type => $SMS);
 			unless (defined $message_types{$_->{type}}) {
 				warn "Unknown message type '$_->{type}' - ignoring message.\n";
 				dd $_;
@@ -131,10 +134,10 @@ if (defined $opts{'i'}) {
 		my @attachment_filenames;
 		unless (@attachment_filenames = readdir(DIR)) {warn "Can't read directory '$opts{'i'}/attachment': $!"; next}
 		closedir (DIR);
-		my @attachment_parts = $signal->selectall_array("SELECT mid,ct,unique_id FROM part", {Slice => {}});
+		my @attachment_parts = $signal->selectall_array("SELECT mid,ct,file_name,unique_id FROM part", {Slice => {}});
 		my @mmss = $signal->selectall_array("SELECT mms._id,thread_id,address,date,msg_box,body,phone,system_display_name,group_id FROM mms INNER JOIN recipient ON mms.address = recipient._id", {Slice => {}});
 		foreach (@mmss) {
-			my %message = (source_format => $SIGNAL, timestamp => $_->{date});
+			my %message = (source_format => $SIGNAL, timestamp => $_->{date}, message_type => $MMS);
 			unless (defined $message_types{$_->{msg_box}}) {
 				warn "Unknown message type '$_->{msg_box}' - ignoring message.\n";
 				dd $_;
@@ -176,13 +179,13 @@ if (defined $opts{'i'}) {
 			foreach (@attachment_parts) {
 				next unless ($_->{mid} eq $mid);
 				my $unique_id = $_->{unique_id};	
-				my $filename;
+				my $filename; # this will be the filename used in the backup to store the attachment data on disk, as opposed to the original filename of the attachment as stored in the 'file_name' column of the 'parts' table
 				foreach (@attachment_filenames) {if (/^${unique_id}_.*$/) {$filename = $_; last}}
 				unless (defined $filename) {warn "File not found for attachment with unique_id '$unique_id'\n"; next}
 				unless (open (ATTACHMENT, '<', "$opts{'i'}/attachment/$filename")) {warn "Can't open '$filename': $!"; next}
 				my $attachment = do {local $/; <ATTACHMENT>};
 				close ATTACHMENT;
-				push @parts, {data => $attachment, content_type => $_->{ct}};
+				push @parts, {data => $attachment, content_type => $_->{ct}, filename => $_->{file_name}};
 			}
 			#unless (@parts) {warn "Message has no parts - skipping.\n"; dd $_; $total_messages++; $ignored_messages++; next}
 			insert(\%message, \@parts);
@@ -219,7 +222,7 @@ sub insert {
 	return if $err;
 	my $message_id = $dbh->last_insert_id;
 	foreach (@{$parts}) {
-		$part_sth->execute($message_id, $_->{'data'}, $_->{'content_type'}); 
+		$part_sth->execute($message_id, $_->{'data'}, $_->{'content_type'}, $_->{'filename'}); 
 		$total_parts++;
 	}
 }

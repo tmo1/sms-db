@@ -1,4 +1,8 @@
+# Querying the sms-db database
+
 Here are some examples of querying the sms-db database. Much of the information here will be elementary to someone proficient in [SQLite](https://www.sqlite.org/index.html); I am an SQLite novice, however, and these examples may be useful to others like me.
+
+## Using the SQLite command line interface
 
 Install the SQLite command line interface (in Debian, it's in the `sqlite3` package), and run it in interactive mode, e.g.:
 
@@ -33,3 +37,9 @@ All the previous commands display only message metadata, not data. To display th
 To include only text parts, check the `content_type` column:
 
 	select sender_name,recipient_name,timestamp,data FROM messages INNER JOIN parts ON messages._id = parts.message_id where sender_name = 'Alice' and content_type LIKE 'text%' ORDER BY timestamp;
+
+## Using the SQLite Database Browser
+
+The sms-db database can also be examined and searched via the SQLite Database Browser (`sqlitebrowser` in Debian). The program has many powerful features, but one of the simplest ways to use it is by opening the database, selecting the 'Browse Data' tab, selecting a table, and then using the filter boxes to search. For example, to search for any message containing the word 'Perl', select the 'parts' table, and type 'Perl' into the filter box for the 'data' column. To see the metadata of a particular part, press <CTRL> + <SHIFT> and left-click its 'message_id' field.
+
+The browser also provides a convenient way to view (many) non-text parts; simply clicking on the 'data' field of a part will (often?) result in its display in the 'Edit Database Cell' pane.

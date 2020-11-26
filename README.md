@@ -54,7 +54,7 @@ Bugle SQLite database files (`bugle_db`) used internally by recent versions of A
 
 #### Limitations
 
-Both SMS and MMS metadata and text parts are imported, but MMS non-text parts are not currently imported. I can't find them in the Bugle database itself, and I don't know how to use the `content://mms/part/nnnn` URIs in the `uri` field of the Bugle `parts` table to get the data. The information I found online explains how to use the URI to get the data programatically from a running Android system, but I could not find an explanation of how to use it with a standalone Bugle database.
+Both SMS and MMS metadata and text parts are imported, but MMS non-text parts (and their filenames) are not currently imported. I can't find them in the Bugle database itself, and I don't know how to use the `content://mms/part/nnnn` URIs in the `uri` field of the Bugle `parts` table to get the data. The information I found online explains how to use the URI to get the data programatically from a running Android system, but I could not find an explanation of how to use it with a standalone Bugle database.
 
 ### XML (`-f xml`)
 
@@ -92,13 +92,13 @@ Currently, all timestamps are in [Epoch time format](https://en.wikipedia.org/wi
 
 Many of the columns in the sms-db database schema should be self-explanatory.
 
-In the `messages` table, `msg_box` has the meaning it has in the [Synctech XML fields documentation](https://synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/):
+### Columns in the `messages` table: 
 
-	msg_box - The type of message, 1 = Received, 2 = Sent, 3 = Draft, 4 = Outbox
+ - `msg_box` values have the meaning they have in the [Synctech XML format](https://synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/): 1 = Received, 2 = Sent, 3 = Draft, 4 = Outbox. (Synctech uses `type` for SMSs and `msg_box` for MMS; we use `msg_box` for both.)
 
-(Synctech uses `type` for SMSs and `msg_box` for MMS; we use `msg_box` for both.)
+ - `message_type` records the type of message: 0 = SMS, 1 = MMS.
 
-The `source_format` column records the format of the message collection of a message's origin: 0 = XML, 1 = Bugle, 2 = Signal.
+ - `source_format` records the format of the message collection of a message's origin: 0 = XML, 1 = Bugle, 2 = Signal.
 
 ## Alternatives
 
