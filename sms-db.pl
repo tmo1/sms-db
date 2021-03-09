@@ -3,7 +3,7 @@
 # This is free software, you may use it and distribute it under the same
 # terms as Perl itself.
 #
-# Copyright (C) 2019-2020 Thomas More (tmore1@gmx.com)
+# Copyright (C) 2019-2021 Thomas More (tmore1@gmx.com)
 #
 # sms-db comes with ABSOLUTELY NO WARRANTY
 # sms-db is available at https://github.com/tmo1/sms-db
@@ -125,8 +125,14 @@ if (defined $opts{'i'}) {
 			foreach (@smss) {
 				my %message = (source_format => $SIGNAL, timestamp => $_->{date}, message_type => $SMS);
 				unless (defined $message_types{$_->{type}}) {
-					warn "Unknown message type '$_->{type}' - ignoring message.\n";
-					dd $_;
+					if ($_->{type} == 2097156) {
+						# This is apparently a Signal-generated "Alice is on Signal!" message, so we're going to ignore it
+						warn "Ignoring '$_->{system_display_name} is on Signal!' message\n";
+					}
+					else {
+						warn "Unknown message type '$_->{type}' - ignoring message.\n";
+						dd $_;
+					}
 					$total_messages++;
 					$ignored_messages++;
 					next;
@@ -179,6 +185,7 @@ if (defined $opts{'i'}) {
 						($phones[$#phones +1], $system_display_names[$#system_display_names + 1]) = $signal->selectrow_array($member_sth, {}, $_);
 					}
 					$recipient_phones = join(',', @phones);
+					foreach (@system_display_names) {$_ //= "<UNAVAILABLE>"}
 					$recipient_system_display_names = join(',', @system_display_names);
 				}
 				if (defined $recipient_phones) {$message{'recipient_address'} = $recipient_phones};
