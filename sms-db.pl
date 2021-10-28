@@ -147,7 +147,7 @@ if (defined $opts{'i'}) {
 		if ($opts{'t'} eq 'mms' or $opts{'t'} eq 'all') {
 			my $group_sth = $signal->prepare("SELECT members FROM groups WHERE group_id = ?");
 			my $member_sth = $signal->prepare("SELECT phone,system_display_name FROM recipient WHERE _id = ?");
-			my $thread_sth = $signal->prepare("SELECT recipient_ids FROM thread WHERE _id = ?");
+			my $thread_sth = $signal->prepare("SELECT thread_recipient_id FROM thread WHERE _id = ?");
 			my $recipient_sth = $signal->prepare("SELECT group_id FROM recipient WHERE _id = ?");
 			unless (opendir(DIR, "$opts{'i'}/attachment")) {warn "Can't open '$opts{'i'}/attachment': $!"; next}
 			my @attachment_filenames;
@@ -175,8 +175,8 @@ if (defined $opts{'i'}) {
 				}
 				($message{'msg_box'}, $message{'sender_address'}, $message{'sender_name'}, $message{'recipient_address'}, $message{'recipient_name'}) =
 					($message_types{$_->{msg_box}} eq 2) ? (2, "<SELF>", "<SELF>", $_->{phone}, $_->{system_display_name} // "<UNAVAILABLE>") : (1, $_->{phone}, $_->{system_display_name} // "<UNAVAILABLE>", "<SELF>", "<SELF>");
-				my $recipient_ids = $signal->selectrow_array($thread_sth, {}, $_->{thread_id});
-				my $group_id = $signal->selectrow_array($recipient_sth, {}, $recipient_ids);
+				my $thread_recipient_id = $signal->selectrow_array($thread_sth, {}, $_->{thread_id});
+				my $group_id = $signal->selectrow_array($recipient_sth, {}, $thread_recipient_id);
 				my ($recipient_phones, $recipient_system_display_names);
 				if (defined $group_id) {
 					my (@phones, @system_display_names);
