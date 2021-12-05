@@ -118,8 +118,12 @@ if (defined $opts{'i'}) {
 	}
 	elsif ($opts{'f'} eq 'signal') {
 		my $signal = DBI->connect("dbi:SQLite:$opts{'i'}/signal_backup.db", undef, undef, {RaiseError => 1, PrintError => 0, AutoCommit => 0, sqlite_extended_result_codes => 1});
-		my %message_types = (23 => 2, 87 => 2, 88 => 2, 10485783 => 2, 20 => 1, 10485780 => 1);
-		# I'm not really sure what the message types all mean. I'm assuming, based on the contents of my Signal backup database, that the ones I've assigned to '2' are roughly equivalent to 'sent' and the ones I've assigned to '1' are roughly equivalent to 'received'. We use the Synctech XML 'type' / 'msg_box' field values (https://synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/) internally to represent 'sent' and 'received'
+		# Signal defines its basic message types here: https://github.com/signalapp/Signal-Android/blob/master/app/src/main/java/org/thoughtcrime/securesms/database/MmsSmsColumns.java
+		# We use '2' for the various forms of outgoing messages, and '1' for received messages, following the Android (and Synctech XML) 'type' / 'msg_box' field values
+		# https://developer.android.com/reference/android/provider/Telephony.TextBasedSmsColumns
+		# https://developer.android.com/reference/android/provider/Telephony.BaseMmsColumns
+		# https://synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/)
+		my %message_types = (23 => 2, 24 => 2, 87 => 2, 88 => 2, 10485783 => 2, 20 => 1, 10485780 => 1);
 		if ($opts{'t'} eq 'sms' or $opts{'t'} eq 'all') {
 			my @smss = $signal->selectall_array("SELECT address,date,type,body,phone,system_display_name FROM sms INNER JOIN recipient ON sms.address = recipient._id", {Slice => {}});
 			foreach (@smss) {
@@ -129,8 +133,11 @@ if (defined $opts{'i'}) {
 						# This is apparently a Signal-generated "Alice is on Signal!" message, so we're going to ignore it
 						warn "Ignoring '$_->{system_display_name} is on Signal!' message\n";
 					}
+					elsif ($_->{type} == 2) {
+						warn "Ignoring 'outgoing audio call' ($_->{phone}: ", $_->{system_display_name} // "UNAVAILABLE", ") message\n";
+					}
 					else {
-						warn "Unknown message type '$_->{type}' - ignoring message.\n";
+						warn "Ignoring message of unkown type '$_->{type}':\n";
 						dd $_;
 					}
 					$total_messages++;
@@ -158,7 +165,7 @@ if (defined $opts{'i'}) {
 			foreach (@mmss) {
 				my %message = (source_format => $SIGNAL, timestamp => $_->{date}, message_type => $MMS);
 				unless (defined $message_types{$_->{msg_box}}) {
-					warn "Unknown message type '$_->{msg_box}' - ignoring message.\n";
+					warn "Ignoring message with unknown 'msg_box' value '$_->{msg_box}':\n";
 					dd $_;
 					$total_messages++;
 					$ignored_messages++;
