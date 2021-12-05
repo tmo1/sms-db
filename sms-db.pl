@@ -138,7 +138,7 @@ if (defined $opts{'i'}) {
 					next;
 				}
 				($message{'msg_box'}, $message{'sender_address'}, $message{'sender_name'}, $message{'recipient_address'}, $message{'recipient_name'}) =
-					($message_types{$_->{type}} eq 2) ? (2, "<SELF>", "<SELF>", $_->{phone}, $_->{system_display_name} // "<UNAVAILABLE>") : (1, $_->{phone}, $_->{system_display_name} // "<UNAVAILABLE>", "<SELF>", "<SELF>");
+					($message_types{$_->{type}} eq 2) ? (2, "<SELF>", "<SELF>", $_->{phone} // "<UNAVAILABLE>", $_->{system_display_name} // "<UNAVAILABLE>") : (1, $_->{phone} // "<UNAVAILABLE>", $_->{system_display_name} // "<UNAVAILABLE>", "<SELF>", "<SELF>");
 				my @parts;
 				push @parts, {data => $_->{body}, content_type => 'text/plain'};
 				insert(\%message, \@parts);
@@ -174,7 +174,7 @@ if (defined $opts{'i'}) {
 					$_->{system_display_name} = join(',', @system_display_names);
 				}
 				($message{'msg_box'}, $message{'sender_address'}, $message{'sender_name'}, $message{'recipient_address'}, $message{'recipient_name'}) =
-					($message_types{$_->{msg_box}} eq 2) ? (2, "<SELF>", "<SELF>", $_->{phone}, $_->{system_display_name} // "<UNAVAILABLE>") : (1, $_->{phone}, $_->{system_display_name} // "<UNAVAILABLE>", "<SELF>", "<SELF>");
+					($message_types{$_->{msg_box}} eq 2) ? (2, "<SELF>", "<SELF>", $_->{phone} // "<UNAVAILABLE>", $_->{system_display_name} // "<UNAVAILABLE>") : (1, $_->{phone} // "<UNAVAILABLE>", $_->{system_display_name} // "<UNAVAILABLE>", "<SELF>", "<SELF>");
 				my $thread_recipient_id = $signal->selectrow_array($thread_sth, {}, $_->{thread_id});
 				my $group_id = $signal->selectrow_array($recipient_sth, {}, $thread_recipient_id);
 				my ($recipient_phones, $recipient_system_display_names);
@@ -184,6 +184,7 @@ if (defined $opts{'i'}) {
 					foreach (split(/,/, $members)) {
 						($phones[$#phones +1], $system_display_names[$#system_display_names + 1]) = $signal->selectrow_array($member_sth, {}, $_);
 					}
+					foreach (@phones) {$_ //= "<UNAVAILABLE>"}
 					$recipient_phones = join(',', @phones);
 					foreach (@system_display_names) {$_ //= "<UNAVAILABLE>"}
 					$recipient_system_display_names = join(',', @system_display_names);
