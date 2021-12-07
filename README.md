@@ -72,9 +72,17 @@ sms-db does not currently distinguish between the various recipient address type
 
 Decoded [Signal backups](https://support.signal.org/hc/en-us/articles/360007059752-Backup-and-Restore-Messages#android_restore). This option is designed to work with the encrypted backups produced by Signal for Android, decrypted and unpacked by [signal backup decode](https://github.com/pajowu/signal-backup-decode). (It may or may not work with the output of other tools that decode Signal backups, such as [signal back](https://github.com/xeals/signal-back) or [signalbackup-tools](https://github.com/bepaald/signalbackup-tools); I haven't tried it.) When using this format, set `-i` to the root directory of the decrypted backup (e.g., `-i signal-yyyy-mm-dd-nn-nn-nn`); this directory should contain the file `signal-backup-db`, which contains the SMS and MMS metadata and text parts, as well as the directory `attachment`, which contains the MMS attachments stored as individual files. All this is imported.
 
-### Limitations
+#### Limitations
 
-My Signal databases contain only ordinary SMS and MMS messages, and not Signal's end-to-end encrypted messages, so I do not know whether sms-db will properly import such messages.
+Signal has [updated its database format many times](https://github.com/signalapp/Signal-Android/blob/master/app/src/main/java/org/thoughtcrime/securesms/database/helpers/SignalDatabaseMigrations.kt), and will likely continue to do so in the future. This [can break](https://github.com/tmo1/sms-db/pull/2) sms-db's Signal import capability. sms-db will attempt to maintain compatibility with the latest version of the Signal database, which may result in incompatibility between more recent versions of sms-db and backups produced by earlier versions of Signal. In such cases, the recommended solution is to leverage [Signal's own database migration code](https://github.com/signalapp/Signal-Android/blob/master/app/src/main/java/org/thoughtcrime/securesms/database/helpers/SignalDatabaseMigrations.kt) to upgrade the database to the current format, via the following procedure (which ought to work, although it has not been tested):
+
+ - Install the latest version of Signal, either on actual hardware, or on [an Android virtual device](https://developer.android.com/studio/run/managing-avds) run on the [Android Emulator](https://developer.android.com/studio/run/emulator).
+ - In Signal, [restore from the old backup file](https://support.signal.org/hc/en-us/articles/360007059752-Backup-and-Restore-Messages).
+ - In Signal, [create a new backup](https://support.signal.org/hc/en-us/articles/360007059752-Backup-and-Restore-Messages).
+ 
+The new backup will hopefully be compatible with the latest version of sms-db. (If it isn't, [open an issue](https://github.com/tmo1/sms-db/issues) to report the problem.)
+
+My Signal databases contain only ordinary SMS and MMS messages, and not Signal's end-to-end encrypted messages, so I do not know whether sms-db will properly import such messages. (See [here](https://github.com/tmo1/sms-db/pull/2#issue-1038058117).)
 
 ### General Limitations
 
