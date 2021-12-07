@@ -52,7 +52,7 @@ The following input formats are currently (at least partially) supported:
 
 ### Bugle (`-f bugle`)
 
-Bugle SQLite database files (`bugle_db`) used internally by recent versions of Android. These can be obtained in various ways, such as via the Android backup apps [oandbackup](https://github.com/jensstein/oandbackup) / [OAndBackupX](https://github.com/machiav3lli/oandbackupx).
+Bugle SQLite database files (`bugle_db`) used internally by some versions of Android. These can be obtained in various ways, such as via the Android backup apps [oandbackup](https://github.com/jensstein/oandbackup) / [OAndBackupX](https://github.com/machiav3lli/oandbackupx).
 
 #### Limitations
 
@@ -70,7 +70,9 @@ sms-db does not currently distinguish between the various recipient address type
 
 ### Signal (`-f signal`)
 
-Decoded [Signal backups](https://support.signal.org/hc/en-us/articles/360007059752-Backup-and-Restore-Messages#android_restore). This option is designed to work with the encrypted backups produced by Signal for Android, decrypted and unpacked by [signal backup decode](https://github.com/pajowu/signal-backup-decode). (It may or may not work with the output of other tools that decode Signal backups, such as [signal back](https://github.com/xeals/signal-back) or [signalbackup-tools](https://github.com/bepaald/signalbackup-tools); I haven't tried it.) When using this format, set `-i` to the root directory of the decrypted backup (e.g., `-i signal-yyyy-mm-dd-nn-nn-nn`); this directory should contain the file `signal-backup-db`, which contains the SMS and MMS metadata and text parts, as well as the directory `attachment`, which contains the MMS attachments stored as individual files. All this is imported.
+[Encrypted backups produced by Signal for Android](https://support.signal.org/hc/en-us/articles/360007059752-Backup-and-Restore-Messages#android_restore), decrypted and unpacked by either [Signal backup decode](https://github.com/pajowu/signal-backup-decode) or [Signal for Android decryption](https://github.com/mossblaser/signal_for_android_decryption). (sms-db as currently written is unlikely to work with the output of other tools that decode Signal backups, such as [signal back](https://github.com/xeals/signal-back) or [signalbackup-tools](https://github.com/bepaald/signalbackup-tools), but it would likely not be difficult to add support for them.)
+
+When using the Signal format, set `-i` to the root directory of the decrypted backup (e.g. `-i signal-yyyy-mm-dd-nn-nn-nn` or `-i my-signal-backup`); this directory should contain the file `signal_backup.db` or `database.sqlite` (depending on which decryption tool is used), which contains the SMS and MMS metadata and text parts, as well as the directory `attachment` or `attachments`, which contains the MMS attachments stored as individual files. All this is imported.
 
 #### Limitations
 

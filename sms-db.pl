@@ -117,7 +117,12 @@ if (defined $opts{'i'}) {
 		$bugle->disconnect;
 	}
 	elsif ($opts{'f'} eq 'signal') {
-		my $signal = DBI->connect("dbi:SQLite:$opts{'i'}/signal_backup.db", undef, undef, {RaiseError => 1, PrintError => 0, AutoCommit => 0, sqlite_extended_result_codes => 1});
+		my $filenames;
+		if (-f "$opts{'i'}/signal_backup.db") {$filenames = {db_name => 'signal_backup.db', attach_dir => 'attachment', attach_re => qr/_.*/}}
+		elsif (-f "$opts{'i'}/database.sqlite") {$filenames = {db_name => 'database.sqlite', attach_dir => 'attachments', attach_re => qr/\.bin$/}}
+		else {die "Unrecognized Signal backup format.\n"}
+		my $signal = DBI->connect("dbi:SQLite:$opts{'i'}/$filenames->{'db_name'}", undef, undef, {RaiseError => 1, PrintError => 0, AutoCommit => 0, sqlite_extended_result_codes => 1});
+		#my $signal = DBI->connect("dbi:SQLite:$opts{'i'}/signal_backup.db", undef, undef, {RaiseError => 1, PrintError => 0, AutoCommit => 0, sqlite_extended_result_codes => 1});
 		# Signal defines its basic message types here: https://github.com/signalapp/Signal-Android/blob/master/app/src/main/java/org/thoughtcrime/securesms/database/MmsSmsColumns.java
 		# We use '2' for the various forms of outgoing messages, and '1' for received messages, following the Android (and Synctech XML) 'type' / 'msg_box' field values
 		# https://developer.android.com/reference/android/provider/Telephony.TextBasedSmsColumns
@@ -156,9 +161,11 @@ if (defined $opts{'i'}) {
 			my $member_sth = $signal->prepare("SELECT phone,system_display_name FROM recipient WHERE _id = ?");
 			my $thread_sth = $signal->prepare("SELECT thread_recipient_id FROM thread WHERE _id = ?");
 			my $recipient_sth = $signal->prepare("SELECT group_id FROM recipient WHERE _id = ?");
-			unless (opendir(DIR, "$opts{'i'}/attachment")) {warn "Can't open '$opts{'i'}/attachment': $!"; next}
+			unless (opendir(DIR, "$opts{'i'}/$filenames->{'attach_dir'}")) {warn "Can't open '$opts{'i'}/$filenames->{'attach_dir'}: $!"; next}
+			#unless (opendir(DIR, "$opts{'i'}/attachment")) {warn "Can't open '$opts{'i'}/attachment': $!"; next}
 			my @attachment_filenames;
-			unless (@attachment_filenames = readdir(DIR)) {warn "Can't read directory '$opts{'i'}/attachment': $!"; next}
+			unless (@attachment_filenames = readdir(DIR)) {warn "Can't read directory '$opts{'i'}/$filenames->{'attach_dir'}': $!"; next}
+			#unless (@attachment_filenames = readdir(DIR)) {warn "Can't read directory '$opts{'i'}/attachment': $!"; next}
 			closedir (DIR);
 			my @attachment_parts = $signal->selectall_array("SELECT mid,ct,file_name,unique_id FROM part", {Slice => {}});
 			my @mmss = $signal->selectall_array("SELECT mms._id,thread_id,address,date,msg_box,body,phone,system_display_name,group_id FROM mms INNER JOIN recipient ON mms.address = recipient._id", {Slice => {}});
@@ -205,9 +212,11 @@ if (defined $opts{'i'}) {
 					next unless ($_->{mid} eq $mid);
 					my $unique_id = $_->{unique_id};	
 					my $filename; # this will be the filename used in the backup to store the attachment data on disk, as opposed to the original filename of the attachment as stored in the 'file_name' column of the 'parts' table
-					foreach (@attachment_filenames) {if (/^${unique_id}_.*$/) {$filename = $_; last}}
+					foreach (@attachment_filenames) {if (/^${unique_id}${$filenames->{'attach_re'}}$/) {$filename = $_; last}}
+					#foreach (@attachment_filenames) {if (/^${unique_id}_.*$/) {$filename = $_; last}}
 					unless (defined $filename) {warn "File not found for attachment with unique_id '$unique_id'\n"; next}
-					unless (open (ATTACHMENT, '<', "$opts{'i'}/attachment/$filename")) {warn "Can't open '$filename': $!"; next}
+					unless (open (ATTACHMENT, '<', "$opts{'i'}/$filenames->{'attach_dir'}/$filename")) {warn "Can't open '$filename': $!"; next}
+					#unless (open (ATTACHMENT, '<', "$opts{'i'}/attachment/$filename")) {warn "Can't open '$filename': $!"; next}
 					my $attachment = do {local $/; <ATTACHMENT>};
 					close ATTACHMENT;
 					push @parts, {data => $attachment, content_type => $_->{ct}, filename => $_->{file_name}};
